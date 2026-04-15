@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EcoLens — Waste Analyzer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0b0f0c;
+      --surface:   #111812;
+      --card:      #161e17;
+      --border:    #223023;
+      --green:     #4ade80;
+      --green-dim: #1a4a22;
+      --amber:     #fbbf24;
+      --amber-dim: #3a2a00;
+      --red:       #f87171;
+      --red-dim:   #3a1010;
+      --teal:      #34d399;
+      --text:      #e4ede5;
+      --muted:     #6b7f6c;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* === BACKGROUND GRID === */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    /* === GLOW ORBS === */
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(90px); pointer-events: none; z-index: 0; opacity: 0.12;
+    }
+    .orb-1 { width: 500px; height: 500px; top: -120px; left: -150px; background: #22c55e; }
+    .orb-2 { width: 400px; height: 400px; bottom: -100px; right: -100px; background: #16a34a; }
+
+    /* === LAYOUT === */
+    .wrap {
+      position: relative; z-index: 1;
+      max-width: 860px; margin: 0 auto; padding: 0 20px 80px;
+    }
+
+    /* === HEADER === */
+    header {
+      padding: 52px 0 40px;
+      display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+
+    .logo-block {}
+    .logo-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--green-dim); border: 1px solid var(--green);
+      border-radius: 4px; padding: 4px 10px;
+      font-size: 11px; font-weight: 500; color: var(--green);
+      letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .logo-badge span { font-size: 14px; }
+
+    h1 {
+      font-family: var(--font-head);
+      font-size: clamp(32px, 6vw, 52px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      color: #fff;
+    }
+    h1 em { color: var(--green); font-style: normal; }
+
+    .tagline {
+      margin-top: 10px; color: var(--muted); font-size: 13px; max-width: 420px; line-height: 1.6;
+    }
+
+    /* === API KEY SECTION === */
+    .key-section {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px 24px; margin-bottom: 28px;
+      display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+    }
+    .key-section label {
+      display: block; font-size: 11px; color: var(--muted);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .key-section .field { flex: 1; min-width: 220px; }
+    .key-input {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 14px; color: var(--text);
+      font-family: var(--font-mono); font-size: 13px;
+      outline: none; transition: border-color .2s;
+    }
+    .key-input:focus { border-color: var(--green); }
+    .key-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .key-hint a { color: var(--teal); text-decoration: none; }
+    .key-hint a:hover { text-decoration: underline; }
+
+    /* === UPLOAD ZONE === */
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: 14px;
+      padding: 48px 24px; text-align: center; cursor: pointer;
+      transition: border-color .25s, background .25s;
+      position: relative; overflow: hidden; background: var(--card);
+      margin-bottom: 28px;
+    }
+    .upload-zone:hover, .upload-zone.drag { border-color: var(--green); background: #0f1a10; }
+    .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+    .upload-icon {
+      width: 56px; height: 56px; margin: 0 auto 16px;
+      background: var(--green-dim); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+    }
+    .upload-title {
+      font-family: var(--font-head); font-size: 18px; font-weight: 700;
+      color: #fff; margin-bottom: 6px;
+    }
+    .upload-sub { color: var(--muted); font-size: 12px; }
+
+    /* === PREVIEW === */
+    #preview-wrap {
+      display: none; margin-bottom: 28px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+    }
+    #preview-wrap.show { display: block; }
+    #preview-img {
+      width: 100%; max-height: 400px; object-fit: contain;
+      display: block; background: #0b0f0c;
+    }
+    .preview-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px; border-top: 1px solid var(--border);
+    }
+    .preview-name { font-size: 12px; color: var(--muted); }
+    .btn-clear {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      font-family: var(--font-mono); font-size: 11px; padding: 5px 12px;
+      border-radius: 4px; cursor: pointer; transition: all .2s;
+    }
+    .btn-clear:hover { border-color: var(--red); color: var(--red); }
+
+    /* === ANALYZE BUTTON === */
+    .btn-analyze {
+      width: 100%; padding: 16px;
+      background: var(--green); color: #071009;
+      font-family: var(--font-head); font-size: 16px; font-weight: 700;
+      letter-spacing: 0.04em; border: none; border-radius: 10px;
+      cursor: pointer; transition: all .2s; position: relative; overflow: hidden;
+      margin-bottom: 36px;
+    }
+    .btn-analyze:hover:not(:disabled) { background: #86efac; transform: translateY(-1px); box-shadow: 0 8px 32px rgba(74,222,128,.25); }
+    .btn-analyze:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-analyze .spinner {
+      display: none; width: 20px; height: 20px; border: 2px solid #07100990;
+      border-top-color: #071009; border-radius: 50%; animation: spin .7s linear infinite;
+      position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+    }
+    .btn-analyze.loading .spinner { display: block; }
+    .btn-analyze.loading .btn-text { opacity: .6; }
+
+    @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+    /* === RESULTS === */
+    #results { display: none; }
+    #results.show { display: block; animation: fadeUp .4s ease; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+    .results-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 24px;
+    }
+    .results-header h2 {
+      font-family: var(--font-head); font-size: 22px; font-weight: 700; color: #fff;
+    }
+    .scan-tag {
+      font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 4px; font-weight: 500;
+    }
+    .scan-tag.mixed { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+    .scan-tag.bio    { background: var(--green-dim); color: var(--green);  border: 1px solid var(--green); }
+    .scan-tag.nonbio { background: var(--red-dim);   color: var(--red);    border: 1px solid var(--red); }
+
+    /* Summary row */
+    .summary-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px;
+    }
+    .stat-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .stat-val {
+      font-family: var(--font-head); font-size: 26px; font-weight: 800; line-height: 1;
+    }
+    .stat-val.green { color: var(--green); }
+    .stat-val.amber { color: var(--amber); }
+    .stat-val.red   { color: var(--red); }
+    .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* Items list */
+    .section-title {
+      font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 14px; padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .items-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+
+    .item-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px;
+      display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 14px;
+    }
+    .item-icon { font-size: 24px; line-height: 1; padding-top: 2px; }
+    .item-name { font-family: var(--font-head); font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 4px; }
+    .item-type-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 3px; font-weight: 500;
+    }
+    .item-type-badge.bio    { background: var(--green-dim); color: var(--green); }
+    .item-type-badge.nonbio { background: var(--red-dim);   color: var(--red); }
+    .item-note { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+    .item-hazard {
+      font-size: 10px; padding: 3px 8px; border-radius: 4px;
+      white-space: nowrap;
+    }
+    .item-hazard.high   { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+    .item-hazard.medium { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); }
+    .item-hazard.low    { background: var(--green-dim); color: var(--green); border: 1px solid var(--green); }
+
+    /* Recommendations */
+    .reco-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin-bottom: 32px; }
+
+    .reco-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 18px 20px; position: relative; overflow: hidden;
+    }
+    .reco-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .reco-card.recycle::before  { background: var(--green); }
+    .reco-card.compost::before  { background: #a3e635; }
+    .reco-card.dispose::before  { background: var(--red); }
+    .reco-card.renew::before    { background: var(--teal); }
+    .reco-card.reduce::before   { background: var(--amber); }
+
+    .reco-icon { font-size: 28px; margin-bottom: 10px; }
+    .reco-head { font-family: var(--font-head); font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+    .reco-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+
+    /* Impact */
+    .impact-box {
+      background: var(--green-dim); border: 1px solid var(--green);
+      border-radius: 10px; padding: 20px 24px; display: flex; gap: 16px; align-items: flex-start;
+    }
+    .impact-icon { font-size: 28px; flex-shrink: 0; }
+    .impact-title { font-family: var(--font-head); font-size: 15px; font-weight: 700; color: var(--green); margin-bottom: 6px; }
+    .impact-text  { font-size: 12px; color: #a7d9ac; line-height: 1.6; }
+
+    /* Error */
+    .error-box {
+      background: var(--red-dim); border: 1px solid var(--red);
+      border-radius: 10px; padding: 16px 20px; color: var(--red);
+      font-size: 13px; margin-bottom: 20px; display: none;
+    }
+    .error-box.show { display: block; }
+
+    /* Responsive */
+    @media (max-width: 520px) {
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .item-card { grid-template-columns: auto 1fr; }
+      .item-hazard { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="wrap">
+  <!-- HEADER -->
+  <header>
+    <div class="logo-block">
+      <div class="logo-badge"><span>🌿</span> EcoLens</div>
+      <h1>Waste <em>Analyzer</em></h1>
+      <p class="tagline">Upload a photo of waste items. AI identifies what's biodegradable, what's not, and gives actionable disposal & recycling recommendations.</p>
+    </div>
+  </header>
+
+  <!-- API KEY -->
+  <div class="key-section">
+    <div class="field">
+      <label>Gemini API Key</label>
+      <input class="key-input" type="password" id="apiKey" placeholder="AIza..." autocomplete="off"/>
+      <p class="key-hint">Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a> — stored only in this browser session.</p>
+    </div>
+  </div>
+
+  <!-- UPLOAD -->
+  <div class="upload-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="image/*"/>
+    <div class="upload-icon">📸</div>
+    <div class="upload-title">Drop a photo here</div>
+    <div class="upload-sub">or click to browse — JPG, PNG, WEBP, HEIC supported</div>
+  </div>
+
+  <!-- PREVIEW -->
+  <div id="preview-wrap">
+    <img id="preview-img" alt="Preview"/>
+    <div class="preview-bar">
+      <span class="preview-name" id="preview-name"></span>
+      <button class="btn-clear" id="clearBtn">✕ Remove</button>
+    </div>
+  </div>
+
+  <!-- ANALYZE BUTTON -->
+  <button class="btn-analyze" id="analyzeBtn" disabled>
+    <span class="btn-text">🔍 Analyze Waste</span>
+    <div class="spinner"></div>
+  </button>
+
+  <!-- ERROR -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <div class="results-header">
+      <h2>Analysis Report</h2>
+      <span class="scan-tag" id="overallTag">—</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="summary-grid">
+      <div class="stat-card">
+        <div class="stat-label">Items Detected</div>
+        <div class="stat-val green" id="statTotal">—</div>
+        <div class="stat-sub">in the image</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Biodegradable</div>
+        <div class="stat-val green" id="statBio">—</div>
+        <div class="stat-sub">organic items</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Non-Biodegradable</div>
+        <div class="stat-val red" id="statNonBio">—</div>
+        <div class="stat-sub">synthetic items</div>
+      </div>
+    </div>
+
+    <!-- Detected Items -->
+    <div class="section-title">Detected Items</div>
+    <div class="items-list" id="itemsList"></div>
+
+    <!-- Recommendations -->
+    <div class="section-title">Disposal & Renewal Recommendations</div>
+    <div class="reco-grid" id="recoGrid"></div>
+
+    <!-- Impact -->
+    <div class="impact-box" id="impactBox">
+      <div class="impact-icon">🌍</div>
+      <div>
+        <div class="impact-title">Environmental Impact Note</div>
+        <div class="impact-text" id="impactText"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const fileInput  = document.getElementById('fileInput');
+  const dropZone   = document.getElementById('dropZone');
+  const previewWrap= document.getElementById('preview-wrap');
+  const previewImg = document.getElementById('preview-img');
+  const previewName= document.getElementById('preview-name');
+  const clearBtn   = document.getElementById('clearBtn');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const apiKeyEl   = document.getElementById('apiKey');
+  const errorBox   = document.getElementById('errorBox');
+  const results    = document.getElementById('results');
+
+  let currentFile = null;
+  let base64Data  = null;
+
+  // Drag & drop
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+  function handleFile(file) {
+    if (!file.type.startsWith('image/')) { showError('Please upload an image file.'); return; }
+    currentFile = file;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;
+      base64Data = dataUrl.split(',')[1];
+      previewImg.src = dataUrl;
+      previewName.textContent = file.name;
+      previewWrap.classList.add('show');
+      dropZone.style.display = 'none';
+      updateBtn();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  clearBtn.addEventListener('click', () => {
+    currentFile = null; base64Data = null;
+    fileInput.value = '';
+    previewWrap.classList.remove('show');
+    dropZone.style.display = '';
+    results.classList.remove('show');
+    updateBtn();
+  });
+
+  apiKeyEl.addEventListener('input', updateBtn);
+
+  function updateBtn() {
+    analyzeBtn.disabled = !(currentFile && apiKeyEl.value.trim());
+  }
+
+  analyzeBtn.addEventListener('click', analyze);
+
+  async function analyze() {
+    const key = apiKeyEl.value.trim();
+    if (!key || !base64Data) return;
+
+    analyzeBtn.classList.add('loading');
+    analyzeBtn.disabled = true;
+    hideError();
+    results.classList.remove('show');
+
+    const mimeType = currentFile.type || 'image/jpeg';
+
+    const prompt = `You are an expert environmental waste analyst. Analyze this image carefully and identify all visible waste items.
+
+For each item you detect, classify it as "biodegradable" or "non-biodegradable". Then provide complete disposal, renewal, and recycling recommendations.
+
+Respond ONLY with a valid JSON object in this exact structure (no markdown, no extra text):
+
+{
+  "overall": "mixed" | "biodegradable" | "non-biodegradable",
+  "items": [
+    {
+      "name": "Item name",
+      "emoji": "relevant emoji",
+      "type": "biodegradable" | "non-biodegradable",
+      "hazardLevel": "low" | "medium" | "high",
+      "note": "Brief explanation of classification (1-2 sentences)"
+    }
+  ],
+  "recommendations": [
+    {
+      "category": "recycle" | "compost" | "dispose" | "renew" | "reduce",
+      "icon": "emoji",
+      "title": "Action title",
+      "description": "Detailed actionable recommendation (2-3 sentences)"
+    }
+  ],
+  "environmentalImpact": "2-3 sentences about the overall environmental impact of these waste items and why proper disposal matters."
+}
+
+Be thorough. Identify at least all clearly visible waste items. Provide at least 3 recommendations.`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: mimeType, data: base64Data } }
+              ]
+            }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 2048 }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const raw  = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const clean = raw.replace(/```json|```/gi, '').trim();
+
+      let parsed;
+      try { parsed = JSON.parse(clean); }
+      catch { throw new Error('Could not parse AI response. Try again.'); }
+
+      renderResults(parsed);
+
+    } catch (err) {
+      showError('Error: ' + err.message);
+    } finally {
+      analyzeBtn.classList.remove('loading');
+      analyzeBtn.disabled = false;
+    }
+  }
+
+  function renderResults(d) {
+    // Overall tag
+    const tag = document.getElementById('overallTag');
+    tag.textContent = { mixed: '🔀 Mixed Waste', biodegradable: '🌿 Biodegradable', 'non-biodegradable': '⚠️ Non-Biodegradable' }[d.overall] || d.overall;
+    tag.className = 'scan-tag ' + (d.overall === 'mixed' ? 'mixed' : d.overall === 'biodegradable' ? 'bio' : 'nonbio');
+
+    // Stats
+    const bio    = (d.items || []).filter(i => i.type === 'biodegradable').length;
+    const nonbio = (d.items || []).filter(i => i.type === 'non-biodegradable').length;
+    document.getElementById('statTotal').textContent  = (d.items || []).length;
+    document.getElementById('statBio').textContent    = bio;
+    document.getElementById('statNonBio').textContent = nonbio;
+
+    // Items
+    const itemsList = document.getElementById('itemsList');
+    itemsList.innerHTML = (d.items || []).map(item => `
+      <div class="item-card">
+        <div class="item-icon">${item.emoji || '📦'}</div>
+        <div>
+          <div class="item-name">${esc(item.name)}</div>
+          <span class="item-type-badge ${item.type === 'biodegradable' ? 'bio' : 'nonbio'}">
+            ${item.type === 'biodegradable' ? '🌿 Biodegradable' : '🏭 Non-Biodegradable'}
+          </span>
+          ${item.note ? `<div class="item-note">${esc(item.note)}</div>` : ''}
+        </div>
+        <div>
+          <span class="item-hazard ${item.hazardLevel || 'low'}">
+            ${{ high: '⚠️ High Risk', medium: '⚡ Medium Risk', low: '✓ Low Risk' }[item.hazardLevel] || '✓ Low Risk'}
+          </span>
+        </div>
+      </div>
+    `).join('');
+
+    // Recommendations
+    const recoGrid = document.getElementById('recoGrid');
+    recoGrid.innerHTML = (d.recommendations || []).map(r => `
+      <div class="reco-card ${r.category}">
+        <div class="reco-icon">${r.icon || '♻️'}</div>
+        <div class="reco-head">${esc(r.title)}</div>
+        <div class="reco-desc">${esc(r.description)}</div>
+      </div>
+    `).join('');
+
+    // Impact
+    document.getElementById('impactText').textContent = d.environmentalImpact || '';
+
+    results.classList.add('show');
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function hideError() { errorBox.classList.remove('show'); }
+
+  function esc(str) {
+    return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>
